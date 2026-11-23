@@ -4,310 +4,170 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#10182b">
-  <meta name="description" content="حصّالتي - تطبيق مايكل لإدارة التحويش والأهداف المالية">
   <title>حصّالتي | Michael</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <div class="app-container">
+  <header class="topbar">
+    <div class="brand">
+      <span class="pig">🐷</span>
+      <div>
+        <h1>حصّالتي</h1>
+        <p>خطوة صغيرة.. حلم كبير</p>
+      </div>
+    </div>
+    <button id="themeBtn" class="icon-btn">🌙</button>
+  </header>
 
-    <header class="top-header">
-      <div class="brand">
-        <div class="pig-logo">🐷</div>
+  <main class="container">
+
+    <section class="welcome">
+      <p>أهلاً بيك في حصّالتك 👋</p>
+      <h2>أهلاً Michael</h2>
+      <span>ابدأ تحويش لحلمك النهارده</span>
+    </section>
+
+    <section class="balance-card">
+      <p>رصيد الحصّالة الحالي</p>
+      <h2 id="balance">0 <small>جنيه</small></h2>
+      <div class="balance-details">
         <div>
-          <h1>حصّالتي</h1>
-          <p>رحلة تحويشك تبدأ هنا</p>
+          <span>إجمالي الإيداع</span>
+          <strong id="totalDeposits">0 ج</strong>
+        </div>
+        <div>
+          <span>إجمالي السحب</span>
+          <strong id="totalWithdrawals">0 ج</strong>
+        </div>
+        <div>
+          <span>عدد العمليات</span>
+          <strong id="transactionCount">0</strong>
         </div>
       </div>
+    </section>
 
-      <div class="user-info">
-        <span>أهلاً يا</span>
-        <strong>Michael 👋</strong>
+    <section class="section">
+      <h2>💰 إيداع فلوس</h2>
+      <p class="hint">اضغط على فئة الفلوس لإضافتها للحصّالة</p>
+
+      <div class="money-grid" id="depositButtons">
+        <button class="money-btn" data-value="5">5 <small>جنيه</small></button>
+        <button class="money-btn" data-value="10">10 <small>جنيه</small></button>
+        <button class="money-btn" data-value="20">20 <small>جنيه</small></button>
+        <button class="money-btn" data-value="50">50 <small>جنيه</small></button>
+        <button class="money-btn" data-value="100">100 <small>جنيه</small></button>
+        <button class="money-btn" data-value="200">200 <small>جنيه</small></button>
       </div>
-    </header>
+    </section>
 
-    <nav class="main-nav">
-      <button class="nav-btn active" data-page="home">الرئيسية</button>
-      <button class="nav-btn" data-page="goals">أهدافي 🎯</button>
-      <button class="nav-btn" data-page="calendar">التقويم 📅</button>
-      <button class="nav-btn" data-page="achievements">إنجازاتي 🏆</button>
-      <button class="nav-btn" data-page="stats">الإحصائيات</button>
-      <button class="nav-btn" data-page="settings">الإعدادات ⚙️</button>
-    </nav>
+    <section class="section">
+      <h2>💸 سحب فلوس</h2>
+      <p class="hint">حدد عدد الورق اللي عايز تسحبه</p>
 
-    <main>
+      <div id="withdrawRows" class="withdraw-list"></div>
 
-      <!-- الصفحة الرئيسية -->
-      <section class="page active" id="home">
+      <div class="withdraw-total">
+        <span>إجمالي السحب</span>
+        <strong id="withdrawTotal">0 جنيه</strong>
+      </div>
 
-        <div class="welcome-section">
-          <h2>أهلاً بيك في حصّالتك يا Michael ❤️</h2>
-          <p>كل جنيه بتحوشه بيقربك من حلمك</p>
+      <button id="confirmWithdraw" class="main-btn danger-btn">
+        تأكيد السحب
+      </button>
+    </section>
+
+    <section class="section">
+      <h2>🎯 أهداف التحويش</h2>
+      <div class="goal-form">
+        <input id="goalName" type="text" placeholder="اسم الهدف">
+        <input id="goalAmount" type="number" min="1" placeholder="المبلغ المطلوب">
+        <button id="addGoal" class="main-btn">إضافة هدف</button>
+      </div>
+      <div id="goalsList"></div>
+    </section>
+
+    <section class="section">
+      <h2>📅 تقويم التحويش</h2>
+      <div class="calendar-header">
+        <button id="prevMonth">❯</button>
+        <strong id="calendarTitle"></strong>
+        <button id="nextMonth">❮</button>
+      </div>
+      <div id="calendar" class="calendar"></div>
+    </section>
+
+    <section class="section">
+      <h2>🏆 إنجازاتي</h2>
+      <div id="achievements" class="achievements"></div>
+    </section>
+
+    <section class="section">
+      <h2>📊 إحصائياتي</h2>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span>أعلى إيداع</span>
+          <strong id="largestDeposit">0 ج</strong>
         </div>
-
-        <div class="balance-card">
-          <p>إجمالي فلوسك في الحصّالة</p>
-          <h2><span id="totalBalance">0</span> <small>جنيه</small></h2>
-          <div class="balance-footer">
-            <span>🐷 استمر، أنت بتنجح!</span>
-            <span id="todayDate"></span>
-          </div>
+        <div class="stat-card">
+          <span>أيام التحويش</span>
+          <strong id="savingDays">0</strong>
         </div>
-
-        <div class="quick-stats">
-          <div class="stat-card">
-            <span>إجمالي الإيداعات</span>
-            <strong id="totalDeposits">0</strong>
-          </div>
-          <div class="stat-card">
-            <span>إجمالي السحب</span>
-            <strong id="totalWithdrawals">0</strong>
-          </div>
-          <div class="stat-card">
-            <span>عدد العمليات</span>
-            <strong id="transactionsCount">0</strong>
-          </div>
+        <div class="stat-card">
+          <span>متوسط الإيداع</span>
+          <strong id="averageDeposit">0 ج</strong>
         </div>
+      </div>
+      <div id="weeklyChart" class="weekly-chart"></div>
+    </section>
 
-        <div class="section-card">
-          <h3>💰 فئات الفلوس</h3>
-          <p class="muted">اختار فئة العملة وسجل عددها</p>
+    <section class="section">
+      <h2>📜 سجل العمليات</h2>
+      <div id="transactions" class="transactions">
+        <p class="empty">لسه مفيش عمليات</p>
+      </div>
+    </section>
 
-          <div class="money-cards">
-            <div class="money-card" data-value="5">
-              <div class="coin coin-5">5</div>
-              <strong>5 جنيه</strong>
-              <input type="number" min="0" value="0" class="coin-count" aria-label="عدد فئة 5 جنيه">
-              <button class="add-coin-btn" data-value="5">إضافة</button>
-            </div>
+    <section class="section">
+      <h2>⚙️ الإعدادات</h2>
 
-            <div class="money-card" data-value="10">
-              <div class="coin coin-10">10</div>
-              <strong>10 جنيه</strong>
-              <input type="number" min="0" value="0" class="coin-count" aria-label="عدد فئة 10 جنيه">
-              <button class="add-coin-btn" data-value="10">إضافة</button>
-            </div>
+      <div class="setting-row">
+        <span>🔊 صوت التحويش</span>
+        <input type="checkbox" id="soundToggle" checked>
+      </div>
 
-            <div class="money-card" data-value="20">
-              <div class="coin coin-20">20</div>
-              <strong>20 جنيه</strong>
-              <input type="number" min="0" value="0" class="coin-count" aria-label="عدد فئة 20 جنيه">
-              <button class="add-coin-btn" data-value="20">إضافة</button>
-            </div>
+      <button id="testSound" class="secondary-btn">تجربة الصوت</button>
 
-            <div class="money-card" data-value="50">
-              <div class="coin coin-50">50</div>
-              <strong>50 جنيه</strong>
-              <input type="number" min="0" value="0" class="coin-count" aria-label="عدد فئة 50 جنيه">
-              <button class="add-coin-btn" data-value="50">إضافة</button>
-            </div>
+      <div class="setting-row">
+        <span>🔔 التذكير اليومي</span>
+        <input type="checkbox" id="reminderToggle">
+      </div>
 
-            <div class="money-card" data-value="100">
-              <div class="coin coin-100">100</div>
-              <strong>100 جنيه</strong>
-              <input type="number" min="0" value="0" class="coin-count" aria-label="عدد فئة 100 جنيه">
-              <button class="add-coin-btn" data-value="100">إضافة</button>
-            </div>
+      <input type="time" id="reminderTime" value="20:00">
 
-            <div class="money-card" data-value="200">
-              <div class="coin coin-200">200</div>
-              <strong>200 جنيه</strong>
-              <input type="number" min="0" value="0" class="coin-count" aria-label="عدد فئة 200 جنيه">
-              <button class="add-coin-btn" data-value="200">إضافة</button>
-            </div>
-          </div>
+      <button id="backupBtn" class="secondary-btn">📥 تحميل نسخة احتياطية</button>
+      <button id="restoreBtn" class="secondary-btn">📤 استرجاع نسخة احتياطية</button>
+      <input type="file" id="restoreFile" accept=".json" hidden>
 
-          <div class="custom-deposit">
-            <h3>إضافة مبلغ يدوي</h3>
-            <input type="number" id="customAmount" min="1" placeholder="اكتب المبلغ بالجنيه">
-            <input type="text" id="depositNote" placeholder="ملاحظة (اختياري)">
-            <button id="customDepositBtn" class="primary-btn">إضافة للحصّالة +</button>
-          </div>
-        </div>
+      <button id="resetBtn" class="secondary-btn danger-text">🗑️ تصفير الحصّالة</button>
+    </section>
 
-        <div class="section-card">
-          <h3>💸 سحب فلوس</h3>
-          <p class="muted">اكتب المبلغ اللي عايز تسحبه</p>
-          <input type="number" id="withdrawAmount" min="1" placeholder="المبلغ بالجنيه">
-          <input type="text" id="withdrawNote" placeholder="سبب السحب (اختياري)">
-          <button id="withdrawBtn" class="danger-btn">سحب من الحصّالة</button>
-        </div>
+    <section class="section">
+      <h2>🧮 حاسبة التحويش</h2>
+      <input id="savingTarget" type="number" min="1" placeholder="عايز تحوش كام؟">
+      <input id="dailySaving" type="number" min="1" placeholder="هتحوش كام كل يوم؟">
+      <button id="calculateBtn" class="main-btn">احسب المدة</button>
+      <p id="calculatorResult"></p>
+    </section>
 
-        <div class="section-card">
-          <h3>📋 آخر العمليات</h3>
-          <div id="recentTransactions">
-            <p class="empty-state">لسه مفيش عمليات. ابدأ أول تحويشة! 💰</p>
-          </div>
-        </div>
+  </main>
 
-      </section>
+  <footer>
+    <p>Made with ❤️ by Michael</p>
+    <span>حصّالتي © 2026</span>
+  </footer>
 
-      <!-- الأهداف -->
-      <section class="page" id="goals">
-        <div class="page-heading">
-          <h2>🎯 أهداف التحويش</h2>
-          <p>حدد حلمك وابدأ تقرب منه</p>
-        </div>
-
-        <div class="section-card">
-          <h3>إضافة هدف جديد</h3>
-          <input type="text" id="goalName" placeholder="اسم الهدف">
-          <input type="number" id="goalAmount" min="1" placeholder="المبلغ المطلوب">
-          <input type="date" id="goalDate">
-          <button class="primary-btn" id="addGoalBtn">إضافة الهدف +</button>
-        </div>
-
-        <div id="goalsList" class="goals-list">
-          <p class="empty-state">لسه مفيش أهداف. حدد أول حلم ليك! 🎯</p>
-        </div>
-      </section>
-
-      <!-- التقويم -->
-      <section class="page" id="calendar">
-        <div class="page-heading">
-          <h2>📅 تقويم التحويش</h2>
-          <p>تابع الأيام اللي حوّشت فيها</p>
-        </div>
-
-        <div class="section-card">
-          <div class="calendar-header">
-            <button id="prevMonth">❮</button>
-            <h3 id="calendarMonth"></h3>
-            <button id="nextMonth">❯</button>
-          </div>
-          <div class="calendar-grid" id="calendarGrid"></div>
-          <div id="calendarDetails" class="calendar-details">
-            اختار يوم عشان تشوف تفاصيل التحويش
-          </div>
-        </div>
-      </section>
-
-      <!-- الإنجازات -->
-      <section class="page" id="achievements">
-        <div class="page-heading">
-          <h2>🏆 إنجازاتي</h2>
-          <p>كل خطوة صغيرة تستحق الاحتفال</p>
-        </div>
-
-        <div class="section-card">
-          <h3>تحدي التحويش</h3>
-          <p>حاول تحوش كل يوم لمدة 30 يوم</p>
-          <div class="challenge-progress">
-            <div class="progress-track">
-              <div id="challengeBar" class="progress-fill"></div>
-            </div>
-            <p id="challengeText">0 من 30 يوم</p>
-          </div>
-        </div>
-
-        <div id="badgesList" class="badges-list"></div>
-      </section>
-
-      <!-- الإحصائيات -->
-      <section class="page" id="stats">
-        <div class="page-heading">
-          <h2>📊 إحصائياتك</h2>
-          <p>شوف تطور تحويشك بالأرقام</p>
-        </div>
-
-        <div class="quick-stats">
-          <div class="stat-card">
-            <span>أعلى تحويشة يومية</span>
-            <strong id="bestDay">0</strong>
-          </div>
-          <div class="stat-card">
-            <span>متوسط التحويش اليومي</span>
-            <strong id="averageSaving">0</strong>
-          </div>
-          <div class="stat-card">
-            <span>أيام التحويش</span>
-            <strong id="savingDays">0</strong>
-          </div>
-        </div>
-
-        <div class="section-card">
-          <h3>تحويشك آخر 7 أيام</h3>
-          <div id="weeklyChart" class="weekly-chart"></div>
-        </div>
-      </section>
-
-      <!-- الإعدادات -->
-      <section class="page" id="settings">
-        <div class="page-heading">
-          <h2>⚙️ الإعدادات</h2>
-          <p>تحكم في حصّالتك</p>
-        </div>
-
-        <div class="section-card">
-          <h3>🔊 الصوت</h3>
-          <p class="muted">صوت عملة مميز عند تسجيل التحويش</p>
-          <label class="setting-row">
-            <span>تشغيل صوت التحويش</span>
-            <input type="checkbox" id="soundToggle" checked>
-          </label>
-          <button id="testSoundBtn" class="secondary-btn">تجربة الصوت 🔔</button>
-        </div>
-
-        <div class="section-card">
-          <h3>🌙 المظهر</h3>
-          <label class="setting-row">
-            <span>الوضع الليلي</span>
-            <input type="checkbox" id="darkModeToggle" checked>
-          </label>
-        </div>
-
-        <div class="section-card">
-          <h3>💾 النسخ الاحتياطي</h3>
-          <p class="muted">احفظ بياناتك أو استرجع نسخة سابقة</p>
-          <button id="exportBtn" class="primary-btn">تنزيل نسخة احتياطية</button>
-          <button id="importBtn" class="secondary-btn">استعادة نسخة احتياطية</button>
-          <input type="file" id="importFile" accept=".json" hidden>
-        </div>
-
-        <div class="section-card">
-          <h3>🔔 التذكير اليومي</h3>
-          <label class="setting-row">
-            <span>تفعيل التذكير</span>
-            <input type="checkbox" id="reminderToggle">
-          </label>
-          <input type="time" id="reminderTime" value="20:00">
-          <button id="saveReminderBtn" class="secondary-btn">حفظ وقت التذكير</button>
-          <p class="muted">التذكير يعتمد على دعم المتصفح للإشعارات.</p>
-        </div>
-
-        <div class="section-card">
-          <h3>🧮 حاسبة التحويش</h3>
-          <input type="number" id="dailySaving" min="1" placeholder="هتحوش كام كل يوم؟">
-          <input type="number" id="calculatorTarget" min="1" placeholder="عايز توصل لكام؟">
-          <button id="calculateBtn" class="primary-btn">احسب المدة</button>
-          <p id="calculatorResult"></p>
-        </div>
-
-        <div class="section-card danger-zone">
-          <h3>⚠️ منطقة الخطر</h3>
-          <p class="muted">تصفير الحصّالة هيمسح الرصيد والأهداف وسجل العمليات.</p>
-          <button id="resetBtn" class="danger-btn">تصفير الحصّالة</button>
-        </div>
-
-        <div class="section-card about-card">
-          <h3>🐷 حصّالتي</h3>
-          <p>صنع بحب لـ Michael ❤️</p>
-          <small>إدارة تحويشك بطريقة أسهل</small>
-        </div>
-      </section>
-
-    </main>
-
-    <footer class="app-footer">
-      <p>حصّالتي 🐷 | Made for Michael ❤️</p>
-    </footer>
-
-  </div>
-
-  <div id="toast" class="toast"></div>
-
+  <audio id="coinSound" preload="auto"></audio>
   <script src="script.js"></script>
 </body>
 </html>
