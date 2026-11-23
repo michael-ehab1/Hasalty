@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#21164f">
   <title>حصّالتي | Michael</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -11,163 +12,181 @@
 
   <header class="topbar">
     <div class="brand">
-      <span class="pig">🐷</span>
+      <div class="brand-icon">🐷</div>
       <div>
         <h1>حصّالتي</h1>
-        <p>خطوة صغيرة.. حلم كبير</p>
+        <p>كل جنيه بيقربك من حلمك ✨</p>
       </div>
     </div>
-    <button id="themeBtn" class="icon-btn">🌙</button>
+    <button id="themeBtn" class="theme-btn">🌙</button>
   </header>
 
   <main class="container">
 
     <section class="welcome">
-      <p>أهلاً بيك في حصّالتك 👋</p>
-      <h2>أهلاً Michael</h2>
-      <span>ابدأ تحويش لحلمك النهارده</span>
+      <span class="welcome-tag">YOUR SAVINGS SPACE ✨</span>
+      <h2>أهلاً بيك يا Michael ❤️</h2>
+      <p>يلا نكبر حصّالتك خطوة بخطوة!</p>
     </section>
 
     <section class="balance-card">
-      <p>رصيد الحصّالة الحالي</p>
+      <div class="balance-decoration">✨</div>
+      <p>إجمالي فلوسك في الحصّالة</p>
       <h2 id="balance">0 <small>جنيه</small></h2>
-      <div class="balance-details">
+      <div class="balance-bottom">
+        <span>💰 إجمالي اللي حوّشته</span>
+        <strong id="totalDeposits">0 جنيه</strong>
+      </div>
+    </section>
+
+    <section class="section money-section">
+      <div class="section-heading">
         <div>
-          <span>إجمالي الإيداع</span>
-          <strong id="totalDeposits">0 ج</strong>
+          <span class="section-tag">YOUR MONEY</span>
+          <h2>💵 اختار فئة الفلوس</h2>
+          <p>اضغط + للإضافة أو − للخصم</p>
         </div>
+        <span class="heading-emoji">💸</span>
+      </div>
+
+      <div id="moneyGrid" class="money-grid">
+
+        <article class="money-card card-5">
+          <div class="money-info">
+            <span class="money-symbol">💵</span>
+            <strong>5</strong>
+            <small>جنيه</small>
+          </div>
+          <div class="money-actions">
+            <button class="minus-btn" data-action="minus" data-value="5">−</button>
+            <span id="count-5">0</span>
+            <button class="plus-btn" data-action="plus" data-value="5">+</button>
+          </div>
+        </article>
+
+        <article class="money-card card-10">
+          <div class="money-info">
+            <span class="money-symbol">💵</span>
+            <strong>10</strong>
+            <small>جنيه</small>
+          </div>
+          <div class="money-actions">
+            <button class="minus-btn" data-action="minus" data-value="10">−</button>
+            <span id="count-10">0</span>
+            <button class="plus-btn" data-action="plus" data-value="10">+</button>
+          </div>
+        </article>
+
+        <article class="money-card card-20">
+          <div class="money-info">
+            <span class="money-symbol">💵</span>
+            <strong>20</strong>
+            <small>جنيه</small>
+          </div>
+          <div class="money-actions">
+            <button class="minus-btn" data-action="minus" data-value="20">−</button>
+            <span id="count-20">0</span>
+            <button class="plus-btn" data-action="plus" data-value="20">+</button>
+          </div>
+        </article>
+
+        <article class="money-card card-50">
+          <div class="money-info">
+            <span class="money-symbol">💵</span>
+            <strong>50</strong>
+            <small>جنيه</small>
+          </div>
+          <div class="money-actions">
+            <button class="minus-btn" data-action="minus" data-value="50">−</button>
+            <span id="count-50">0</span>
+            <button class="plus-btn" data-action="plus" data-value="50">+</button>
+          </div>
+        </article>
+
+        <article class="money-card card-100">
+          <div class="money-info">
+            <span class="money-symbol">💵</span>
+            <strong>100</strong>
+            <small>جنيه</small>
+          </div>
+          <div class="money-actions">
+            <button class="minus-btn" data-action="minus" data-value="100">−</button>
+            <span id="count-100">0</span>
+            <button class="plus-btn" data-action="plus" data-value="100">+</button>
+          </div>
+        </article>
+
+        <article class="money-card card-200">
+          <div class="money-info">
+            <span class="money-symbol">💵</span>
+            <strong>200</strong>
+            <small>جنيه</small>
+          </div>
+          <div class="money-actions">
+            <button class="minus-btn" data-action="minus" data-value="200">−</button>
+            <span id="count-200">0</span>
+            <button class="plus-btn" data-action="plus" data-value="200">+</button>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <section class="quick-stats">
+      <div class="stat-card">
+        <span>📈</span>
+        <small>إجمالي الإيداع</small>
+        <strong id="statDeposits">0 ج</strong>
+      </div>
+      <div class="stat-card">
+        <span>📉</span>
+        <small>إجمالي الخصم</small>
+        <strong id="statWithdrawals">0 ج</strong>
+      </div>
+      <div class="stat-card">
+        <span>🔢</span>
+        <small>عدد العمليات</small>
+        <strong id="transactionCount">0</strong>
+      </div>
+    </section>
+
+    <section class="section history-section">
+      <div class="section-heading">
         <div>
-          <span>إجمالي السحب</span>
-          <strong id="totalWithdrawals">0 ج</strong>
-        </div>
-        <div>
-          <span>عدد العمليات</span>
-          <strong id="transactionCount">0</strong>
+          <span class="section-tag">HISTORY</span>
+          <h2>📜 سجل الحصّالة</h2>
+          <p>كل حركة بتعملها بتتسجل هنا</p>
         </div>
       </div>
-    </section>
-
-    <section class="section">
-      <h2>💰 إيداع فلوس</h2>
-      <p class="hint">اضغط على فئة الفلوس لإضافتها للحصّالة</p>
-
-      <div class="money-grid" id="depositButtons">
-        <button class="money-btn" data-value="5">5 <small>جنيه</small></button>
-        <button class="money-btn" data-value="10">10 <small>جنيه</small></button>
-        <button class="money-btn" data-value="20">20 <small>جنيه</small></button>
-        <button class="money-btn" data-value="50">50 <small>جنيه</small></button>
-        <button class="money-btn" data-value="100">100 <small>جنيه</small></button>
-        <button class="money-btn" data-value="200">200 <small>جنيه</small></button>
+      <div id="transactions">
+        <p class="empty">لسه مفيش عمليات.. ابدأ أول تحويشة! 🐷</p>
       </div>
     </section>
 
-    <section class="section">
-      <h2>💸 سحب فلوس</h2>
-      <p class="hint">حدد عدد الورق اللي عايز تسحبه</p>
-
-      <div id="withdrawRows" class="withdraw-list"></div>
-
-      <div class="withdraw-total">
-        <span>إجمالي السحب</span>
-        <strong id="withdrawTotal">0 جنيه</strong>
-      </div>
-
-      <button id="confirmWithdraw" class="main-btn danger-btn">
-        تأكيد السحب
-      </button>
-    </section>
-
-    <section class="section">
-      <h2>🎯 أهداف التحويش</h2>
-      <div class="goal-form">
-        <input id="goalName" type="text" placeholder="اسم الهدف">
-        <input id="goalAmount" type="number" min="1" placeholder="المبلغ المطلوب">
-        <button id="addGoal" class="main-btn">إضافة هدف</button>
-      </div>
-      <div id="goalsList"></div>
-    </section>
-
-    <section class="section">
-      <h2>📅 تقويم التحويش</h2>
-      <div class="calendar-header">
-        <button id="prevMonth">❯</button>
-        <strong id="calendarTitle"></strong>
-        <button id="nextMonth">❮</button>
-      </div>
-      <div id="calendar" class="calendar"></div>
-    </section>
-
-    <section class="section">
-      <h2>🏆 إنجازاتي</h2>
-      <div id="achievements" class="achievements"></div>
-    </section>
-
-    <section class="section">
-      <h2>📊 إحصائياتي</h2>
-      <div class="stats-grid">
-        <div class="stat-card">
-          <span>أعلى إيداع</span>
-          <strong id="largestDeposit">0 ج</strong>
-        </div>
-        <div class="stat-card">
-          <span>أيام التحويش</span>
-          <strong id="savingDays">0</strong>
-        </div>
-        <div class="stat-card">
-          <span>متوسط الإيداع</span>
-          <strong id="averageDeposit">0 ج</strong>
-        </div>
-      </div>
-      <div id="weeklyChart" class="weekly-chart"></div>
-    </section>
-
-    <section class="section">
-      <h2>📜 سجل العمليات</h2>
-      <div id="transactions" class="transactions">
-        <p class="empty">لسه مفيش عمليات</p>
-      </div>
-    </section>
-
-    <section class="section">
-      <h2>⚙️ الإعدادات</h2>
-
+    <section class="section settings-section">
+      <h2>⚙️ إعداداتك</h2>
       <div class="setting-row">
-        <span>🔊 صوت التحويش</span>
+        <span>🔊 صوت الفلوس</span>
         <input type="checkbox" id="soundToggle" checked>
       </div>
-
-      <button id="testSound" class="secondary-btn">تجربة الصوت</button>
-
+      <button id="testSound" class="secondary-btn">تجربة الصوت 🎵</button>
       <div class="setting-row">
-        <span>🔔 التذكير اليومي</span>
-        <input type="checkbox" id="reminderToggle">
+        <span>🌙 الوضع الليلي</span>
+        <input type="checkbox" id="darkToggle">
       </div>
-
-      <input type="time" id="reminderTime" value="20:00">
-
       <button id="backupBtn" class="secondary-btn">📥 تحميل نسخة احتياطية</button>
       <button id="restoreBtn" class="secondary-btn">📤 استرجاع نسخة احتياطية</button>
       <input type="file" id="restoreFile" accept=".json" hidden>
-
-      <button id="resetBtn" class="secondary-btn danger-text">🗑️ تصفير الحصّالة</button>
-    </section>
-
-    <section class="section">
-      <h2>🧮 حاسبة التحويش</h2>
-      <input id="savingTarget" type="number" min="1" placeholder="عايز تحوش كام؟">
-      <input id="dailySaving" type="number" min="1" placeholder="هتحوش كام كل يوم؟">
-      <button id="calculateBtn" class="main-btn">احسب المدة</button>
-      <p id="calculatorResult"></p>
     </section>
 
   </main>
 
   <footer>
+    <div>🐷 حصّالتي</div>
     <p>Made with ❤️ by Michael</p>
-    <span>حصّالتي © 2026</span>
+    <small>Dream big. Save smart. ✨</small>
   </footer>
 
-  <audio id="coinSound" preload="auto"></audio>
   <script src="script.js"></script>
 </body>
 </html>
