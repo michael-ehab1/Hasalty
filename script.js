@@ -51,7 +51,6 @@ function loadData() {
         );
       }
 
-      // محاولة استرجاع الرصيد القديم لو مفيش سجل
       if (data.transactions.length === 0) {
         const oldBalance = Number(
           parsed.balance ?? parsed.totalBalance ?? parsed.total ?? 0
@@ -511,6 +510,34 @@ restoreFile.addEventListener("change", async () => {
   }
 
   restoreFile.value = "";
+});
+
+// تصفير الحصّالة بالكامل
+document.getElementById("resetBtn").addEventListener("click", () => {
+  const confirmed = confirm(
+    "⚠️ هل أنت متأكد إنك عايز تصفر الحصّالة بالكامل؟\n\nهيتم حذف الرصيد والعملات وسجل العمليات وهدف التوفير نهائيًا!"
+  );
+
+  if (!confirmed) return;
+
+  data = {
+    transactions: [],
+    goal: {
+      name: "",
+      amount: 0
+    }
+  };
+
+  saveData();
+
+  // حذف مفاتيح النسخ القديمة لمنع استرجاع بيانات قديمة
+  localStorage.removeItem("hassalaty_complete_v3");
+  localStorage.removeItem("hassalaty_complete_v2");
+  localStorage.removeItem("hassalaty_data_v1");
+
+  renderAll();
+
+  alert("تم تصفير الحصّالة بنجاح 🐷❤️");
 });
 
 // تحديث كل الصفحات
