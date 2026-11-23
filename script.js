@@ -1,26 +1,36 @@
 
-const denominations = [5, 10, 20, 50, 100, 200];
-const STORAGE_KEY = "hassalaty_data_v1";
+const STORAGE_KEY = "hassalaty_complete_v2";
 
-let data = {
-  counts: {5:0,10:0,20:0,50:0,100:0,200:0},
-  goals: [],
+const defaultData = {
   transactions: [],
-  sound: true
+  goals: [],
+  sound: true,
+  darkMode: true,
+  reminder: false,
+  reminderTime: "20:00"
 };
+
+let data = loadData();
+let calendarDate = new Date();
+let selectedCalendarDay = null;
+let audioContext = null;
+let lastReminderDate = "";
 
 function loadData() {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (saved && saved.counts && Array.isArray(saved.goals) && Array.isArray(saved.transactions)) {
-      data = {
-        ...data,
-        ...saved,
-        counts: {...data.counts, ...saved.counts}
-      };
-    }
-  } catch(e) {
-    console.error("تعذر تحميل البيانات", e);
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return structuredClone(defaultData);
+
+    const parsed = JSON.parse(saved);
+
+    return {
+      ...defaultData,
+      ...parsed,
+      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+      goals: Array.isArray(parsed.goals) ? parsed.goals : []
+    };
+  } catch {
+    return structuredClone(defaultData);
   }
 }
 
@@ -28,482 +38,644 @@ function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-function totalMoney() {
-  return denominations.reduce((sum, d) => sum + d * Number(data.counts[d] || 0), 0);
+function money(value) {
+  return Number(value || 0).toLocaleString("en-US", {
+    maximumFractionDigits: 2
+  });
 }
 
-function moneyIn() {
-  return data.transactions
-    .filter(t => t.type === "in")
-    .reduce((sum,t) => sum + t.amount, 0);
+function totalBalance() {
+  return data.transactions.reduce((total, transaction) => {
+    return total + (transaction.type === "deposit"
+      ? Number(transaction.amount)
+      : -Number(transaction.amount));
+  }, 0);
 }
 
-function moneyOut() {
-  return data.transactions
-    .filter(t => t.type === "out")
-    .reduce((sum,t) => sum + t.amount, 0);
-}
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
 
-function piecesCount() {
-  return denominations.reduce((sum,d) => sum + Number(data.counts[d] || 0),0);
-}
-
-function formatMoney(n) {
-  return Number(n || 0).toLocaleString("ar-EG");
+  clearTimeout(showToast.timer);
+  showToast.timer = setTimeout(() => {
+    toast.classList.remove("show");
+  }, 2600);
 }
 
 function todayKey() {
   const d = new Date();
-  return d.getFullYear() + "-" +
-    String(d.getMonth()+1).padStart(2,"0") + "-" +
-    String(d.getDate()).padStart(2,"0");
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function dateLabel(key) {
-  return new Date(key + "T12:00:00").toLocaleDateString("ar-EG", {
-    day:"numeric", month:"short", year:"numeric"
+function dateKey(date) {
+  const d = new Date(date);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function formatDate(date) {
+  return new Date(date).toLocaleString("ar-EG", {
+    dateStyle: "medium",
+    timeStyle: "short"
   });
 }
 
-function toast(message) {
-  const el = document.getElementById("toast");
-  el.textContent = message;
-  el.classList.add("show");
-  setTimeout(() => el.classList.remove("show"), 2400);
-}
-
-function playCoin() {
+// صوت العملة
+function playCoinSound() {
   if (!data.sound) return;
+
   try {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AudioContextClass();
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
-    oscillator.type = "sine";
-    oscillator.frequency.setValueAtTime(850,ctx.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(1250,ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.12,ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime + 0.16);
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
-    oscillator.start();
-    oscillator.stop(ctx.currentTime + 0.16);
-    oscillator.onended = () => ctx.close();
-  } catch(e) {}
+    if (!AudioContextClass) return;
+
+    if (!audioContext) audioContext = new AudioContextClass();
+
+    if (audioContext.state === "suspended") {
+      audioContext.resume();
+    }
+
+    const now = audioContext.currentTime;
+
+    function note(frequency, start, duration, volume) {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, start);
+      oscillator.frequency.exponentialRampToValueAtTime(
+        frequency * 1.35,
+        start + duration
+      );
+
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.exponentialRampToValueAtTime(volume, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + duration);
+
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+
+      oscillator.start(start);
+      oscillator.stop(start + duration + 0.03);
+    }
+
+    note(880, now, 0.18, 0.16);
+    note(1320, now + 0.12, 0.25, 0.12);
+    note(1760, now + 0.24, 0.35, 0.08);
+  } catch (error) {
+    console.log("Audio unavailable", error);
+  }
 }
 
-function toggleSound() {
-  data.sound = !data.sound;
+// التنقل بين الصفحات
+document.querySelectorAll(".nav-btn").forEach(button => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.remove("active"));
+    document.querySelectorAll(".page").forEach(page => page.classList.remove("active"));
+
+    button.classList.add("active");
+    document.getElementById(button.dataset.page).classList.add("active");
+
+    renderAll();
+  });
+});
+
+// إضافة عملية
+function addTransaction(type, amount, note = "") {
+  amount = Number(amount);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showToast("اكتب مبلغ صحيح");
+    return false;
+  }
+
+  if (type === "withdraw" && amount > totalBalance()) {
+    showToast("رصيدك مش كافي للسحب");
+    return false;
+  }
+
+  data.transactions.unshift({
+    id: Date.now() + Math.random(),
+    type,
+    amount,
+    note,
+    date: new Date().toISOString()
+  });
+
   saveData();
-  updateSoundButton();
-  toast(data.sound ? "الصوت اتفعل 🔊" : "الصوت اتقفل 🔇");
+  playCoinSound();
+  renderAll();
+
+  showToast(type === "deposit"
+    ? `اتضاف ${money(amount)} جنيه للحصّالة! 💰`
+    : `تم سحب ${money(amount)} جنيه`);
+
+  return true;
 }
 
-function updateSoundButton() {
-  document.getElementById("soundBtn").textContent = data.sound ? "🔊 الصوت" : "🔇 الصوت";
-}
+// إضافة فئات العملات
+document.querySelectorAll(".add-coin-btn").forEach(button => {
+  button.addEventListener("click", () => {
+    const card = button.closest(".money-card");
+    const countInput = card.querySelector(".coin-count");
+    const count = Number(countInput.value);
+    const denomination = Number(button.dataset.value);
 
-function addMoney(denomination, change) {
-  const next = Number(data.counts[denomination] || 0) + change;
-  if (next < 0) {
-    toast("مفيش عدد كافي من الفئة دي");
+    if (!Number.isInteger(count) || count <= 0) {
+      showToast("اكتب عدد العملات الأول");
+      return;
+    }
+
+    const amount = count * denomination;
+
+    if (addTransaction("deposit", amount, `إضافة ${count} عملة فئة ${denomination} جنيه`)) {
+      countInput.value = 0;
+    }
+  });
+});
+
+// إضافة مبلغ يدوي
+document.getElementById("customDepositBtn").addEventListener("click", () => {
+  const amount = document.getElementById("customAmount").value;
+  const note = document.getElementById("depositNote").value.trim();
+
+  if (addTransaction("deposit", amount, note || "إضافة يدوية")) {
+    document.getElementById("customAmount").value = "";
+    document.getElementById("depositNote").value = "";
+  }
+});
+
+// السحب
+document.getElementById("withdrawBtn").addEventListener("click", () => {
+  const amount = document.getElementById("withdrawAmount").value;
+  const note = document.getElementById("withdrawNote").value.trim();
+
+  if (addTransaction("withdraw", amount, note || "سحب من الحصّالة")) {
+    document.getElementById("withdrawAmount").value = "";
+    document.getElementById("withdrawNote").value = "";
+  }
+});
+
+// عرض العمليات
+function renderTransactions() {
+  const container = document.getElementById("recentTransactions");
+
+  if (!data.transactions.length) {
+    container.innerHTML = '<p class="empty-state">لسه مفيش عمليات. ابدأ أول تحويشة! 💰</p>';
     return;
   }
 
-  data.counts[denomination] = next;
-
-  if (change > 0) {
-    data.transactions.unshift({
-      id: Date.now() + Math.random(),
-      type: "in",
-      amount: denomination,
-      reason: "إضافة فئة " + denomination + " جنيه",
-      date: new Date().toISOString(),
-      day: todayKey()
-    });
-    document.getElementById("pig").classList.remove("coin-pop");
-    void document.getElementById("pig").offsetWidth;
-    document.getElementById("pig").classList.add("coin-pop");
-    playCoin();
-  } else {
-    data.transactions.unshift({
-      id: Date.now() + Math.random(),
-      type: "out",
-      amount: denomination,
-      reason: "إزالة فئة " + denomination + " جنيه",
-      date: new Date().toISOString(),
-      day: todayKey()
-    });
-  }
-
-  saveData();
-  renderAll();
-}
-
-function renderMoney() {
-  const table = document.getElementById("moneyTable");
-  const cards = document.getElementById("moneyCards");
-
-  table.innerHTML = denominations.map(d => `
-    <tr>
-      <td class="denom">${d} جنيه</td>
-      <td>
-        <div class="counter">
-          <button onclick="addMoney(${d},-1)">−</button>
-          <span>${data.counts[d]}</span>
-          <button class="plus" onclick="addMoney(${d},1)">+</button>
-        </div>
-      </td>
-      <td class="row-total">${formatMoney(d * data.counts[d])} ج</td>
-    </tr>
-  `).join("");
-
-  cards.innerHTML = denominations.map(d => `
-    <div class="money-card">
-      <div class="denom">${d} جنيه</div>
-      <div class="money-card-total">${formatMoney(d * data.counts[d])} ج</div>
-      <div class="counter">
-        <button onclick="addMoney(${d},-1)">−</button>
-        <span>${data.counts[d]}</span>
-        <button class="plus" onclick="addMoney(${d},1)">+</button>
+  container.innerHTML = data.transactions.slice(0, 15).map(transaction => `
+    <div class="transaction-item">
+      <div>
+        <strong>${transaction.type === "deposit" ? "🟢 إيداع" : "🔴 سحب"}</strong>
+        <small>${escapeHTML(transaction.note || "")}</small>
+        <small>${formatDate(transaction.date)}</small>
+      </div>
+      <div>
+        <strong class="${transaction.type === "deposit" ? "deposit-value" : "withdraw-value"}">
+          ${transaction.type === "deposit" ? "+" : "-"}${money(transaction.amount)} ج
+        </strong>
+        <button class="delete-transaction secondary-btn" data-id="${transaction.id}">حذف</button>
       </div>
     </div>
   `).join("");
+
+  container.querySelectorAll(".delete-transaction").forEach(button => {
+    button.addEventListener("click", () => {
+      const id = button.dataset.id;
+      if (!confirm("متأكد إنك عايز تحذف العملية؟")) return;
+
+      data.transactions = data.transactions.filter(t => String(t.id) !== id);
+      saveData();
+      renderAll();
+      showToast("تم حذف العملية");
+    });
+  });
 }
 
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, character => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  })[character]);
+}
+
+// الإحصائيات الرئيسية
 function renderHome() {
-  document.getElementById("grandTotal").textContent = formatMoney(totalMoney());
-  document.getElementById("totalIn").textContent = formatMoney(moneyIn()) + " ج";
-  document.getElementById("totalOut").textContent = formatMoney(moneyOut()) + " ج";
-  document.getElementById("totalPieces").textContent = formatMoney(piecesCount());
+  const balance = totalBalance();
+  const deposits = data.transactions
+    .filter(t => t.type === "deposit")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  const withdrawals = data.transactions
+    .filter(t => t.type === "withdraw")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+
+  document.getElementById("totalBalance").textContent = money(balance);
+  document.getElementById("totalDeposits").textContent = money(deposits);
+  document.getElementById("totalWithdrawals").textContent = money(withdrawals);
+  document.getElementById("transactionsCount").textContent = data.transactions.length;
+  document.getElementById("todayDate").textContent =
+    new Date().toLocaleDateString("ar-EG");
 }
 
-function showPage(page, button) {
-  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
-  document.getElementById(page).classList.add("active");
-  document.querySelectorAll("nav button").forEach(b => b.classList.remove("active"));
-  if (button) button.classList.add("active");
-
-  if (page === "goals") renderGoals();
-  if (page === "history") renderHistory();
-  if (page === "stats") renderStats();
-}
-
-function addGoal() {
+// الأهداف
+document.getElementById("addGoalBtn").addEventListener("click", () => {
   const name = document.getElementById("goalName").value.trim();
-  const target = Number(document.getElementById("goalTarget").value);
+  const amount = Number(document.getElementById("goalAmount").value);
+  const date = document.getElementById("goalDate").value;
 
-  if (!name || !Number.isFinite(target) || target <= 0) {
-    toast("اكتب اسم الهدف ومبلغ صحيح");
+  if (!name || !Number.isFinite(amount) || amount <= 0) {
+    showToast("اكتب اسم الهدف والمبلغ المطلوب");
     return;
   }
 
   data.goals.push({
-    id: Date.now() + Math.random(),
+    id: Date.now(),
     name,
-    target,
-    saved: 0
+    amount,
+    date
   });
 
+  saveData();
+
   document.getElementById("goalName").value = "";
-  document.getElementById("goalTarget").value = "";
-  saveData();
-  renderGoals();
-  toast("هدفك اتضاف بنجاح 🎯");
-}
+  document.getElementById("goalAmount").value = "";
+  document.getElementById("goalDate").value = "";
 
-function updateGoal(id) {
-  const goal = data.goals.find(g => String(g.id) === String(id));
-  if (!goal) return;
-
-  const amount = Number(document.getElementById("goalProgress-" + id).value);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    toast("اكتب مبلغ صحيح");
-    return;
-  }
-
-  goal.saved = Math.min(goal.target, goal.saved + amount);
-  document.getElementById("goalProgress-" + id).value = "";
-  saveData();
-  renderGoals();
-  toast("تم تحديث تقدم الهدف");
-}
-
-function deleteGoal(id) {
-  if (!confirm("متأكد إنك عايز تحذف الهدف؟")) return;
-  data.goals = data.goals.filter(g => String(g.id) !== String(id));
-  saveData();
-  renderGoals();
-}
+  renderAll();
+  showToast("تم إضافة هدفك الجديد 🎯");
+});
 
 function renderGoals() {
-  const list = document.getElementById("goalsList");
+  const container = document.getElementById("goalsList");
 
   if (!data.goals.length) {
-    list.innerHTML = '<div class="empty">لسه مفيش أهداف. أضف أول هدف ليك 🎯</div>';
+    container.innerHTML = '<p class="empty-state">لسه مفيش أهداف. حدد أول حلم ليك! 🎯</p>';
     return;
   }
 
-  list.innerHTML = data.goals.map(g => {
-    const percent = Math.min(100, Math.round(g.saved / g.target * 100));
+  container.innerHTML = data.goals.map(goal => {
+    const progress = Math.min(100, Math.round(totalBalance() / goal.amount * 100));
+
     return `
-      <div class="goal">
-        <div class="goal-head">
-          <div>
-            <div class="goal-name">${escapeHTML(g.name)}</div>
-            <div class="goal-numbers">${formatMoney(g.saved)} من ${formatMoney(g.target)} جنيه</div>
-          </div>
-          <div class="circle" style="--p:${percent}%"><span>${percent}%</span></div>
+      <div class="goal-card">
+        <h3>🎯 ${escapeHTML(goal.name)}</h3>
+        <div class="goal-meta">
+          <span>${money(Math.min(totalBalance(), goal.amount))} جنيه</span>
+          <span>${money(goal.amount)} جنيه</span>
         </div>
-        <div class="progress"><div style="width:${percent}%"></div></div>
-        <div class="goal-bottom">
-          <span class="muted">${percent === 100 ? "مبروك! حققت هدفك 🎉" : "فاضلك " + formatMoney(g.target-g.saved) + " جنيه"}</span>
-          <button class="danger-btn" onclick="deleteGoal('${g.id}')">حذف</button>
+        <div class="progress-track">
+          <div class="progress-fill" style="width:${progress}%"></div>
         </div>
-        ${percent < 100 ? `
-          <div class="field" style="margin-top:14px">
-            <label>إضافة تقدم للهدف (تسجيل متابعة فقط)</label>
-            <input type="number" min="1" id="goalProgress-${g.id}" placeholder="المبلغ">
-          </div>
-          <button class="secondary-btn" onclick="updateGoal('${g.id}')">تحديث التقدم</button>
-        ` : ""}
+        <div class="goal-meta">
+          <span>${progress}% من الهدف</span>
+          <span>${goal.date ? "الموعد: " + escapeHTML(goal.date) : "بدون موعد"}</span>
+        </div>
+        <button class="delete-goal secondary-btn" data-id="${goal.id}">حذف الهدف</button>
       </div>
     `;
   }).join("");
+
+  container.querySelectorAll(".delete-goal").forEach(button => {
+    button.addEventListener("click", () => {
+      if (!confirm("متأكد إنك عايز تحذف الهدف؟")) return;
+
+      data.goals = data.goals.filter(g => String(g.id) !== button.dataset.id);
+      saveData();
+      renderGoals();
+      showToast("تم حذف الهدف");
+    });
+  });
 }
 
-function withdrawMoney() {
-  const amount = Number(document.getElementById("withdrawAmount").value);
-  const reason = document.getElementById("withdrawReason").value.trim();
+// التقويم
+document.getElementById("prevMonth").addEventListener("click", () => {
+  calendarDate.setMonth(calendarDate.getMonth() - 1);
+  renderCalendar();
+});
 
-  if (!Number.isInteger(amount) || amount <= 0 || amount % 5 !== 0) {
-    toast("اكتب مبلغ صحيح من مضاعفات 5 جنيه");
-    return;
-  }
-  if (!reason) {
-    toast("اكتب سبب السحب");
-    return;
-  }
-  if (amount > totalMoney()) {
-    toast("المبلغ أكبر من رصيد الحصالة");
-    return;
+document.getElementById("nextMonth").addEventListener("click", () => {
+  calendarDate.setMonth(calendarDate.getMonth() + 1);
+  renderCalendar();
+});
+
+function renderCalendar() {
+  const year = calendarDate.getFullYear();
+  const month = calendarDate.getMonth();
+
+  document.getElementById("calendarMonth").textContent =
+    calendarDate.toLocaleDateString("ar-EG", { month: "long", year: "numeric" });
+
+  const grid = document.getElementById("calendarGrid");
+  const names = ["ح", "ن", "ث", "ر", "خ", "ج", "س"];
+
+  let html = names.map(name =>
+    `<div class="calendar-day weekday">${name}</div>`
+  ).join("");
+
+  const firstDay = new Date(year, month, 1).getDay();
+  const days = new Date(year, month + 1, 0).getDate();
+
+  for (let i = 0; i < firstDay; i++) html += "<div></div>";
+
+  for (let day = 1; day <= days; day++) {
+    const key = dateKey(new Date(year, month, day));
+
+    const amount = data.transactions
+      .filter(t => t.type === "deposit" && dateKey(t.date) === key)
+      .reduce((sum, t) => sum + Number(t.amount), 0);
+
+    const selected = selectedCalendarDay === key ? "selected" : "";
+    const saved = amount > 0 ? "has-saving" : "";
+
+    html += `
+      <div class="calendar-day ${saved} ${selected}" data-date="${key}">
+        ${day}
+      </div>
+    `;
   }
 
-  // إيجاد تركيبة دقيقة من الفئات الموجودة باستخدام برمجة ديناميكية
-  const dp = Array(amount + 1).fill(null);
-  dp[0] = Array(denominations.length).fill(0);
+  grid.innerHTML = html;
 
-  for (let i = 0; i < denominations.length; i++) {
-    const d = denominations[i];
-    const available = Number(data.counts[d] || 0);
-    for (let a = amount; a >= 0; a--) {
-      if (!dp[a]) continue;
-      for (let count = 1; count <= available && a + count*d <= amount; count++) {
-        const next = a + count*d;
-        if (!dp[next]) {
-          const combination = [...dp[a]];
-          combination[i] += count;
-          dp[next] = combination;
-        }
-      }
-    }
-  }
+  grid.querySelectorAll("[data-date]").forEach(dayElement => {
+    dayElement.addEventListener("click", () => {
+      selectedCalendarDay = dayElement.dataset.date;
+      renderCalendar();
 
-  if (!dp[amount]) {
-    toast("مش قادرين نكوّن المبلغ من الفئات الموجودة بالظبط");
-    return;
-  }
+      const amount = data.transactions
+        .filter(t => t.type === "deposit" && dateKey(t.date) === selectedCalendarDay)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
 
-  denominations.forEach((d,i) => {
-    data.counts[d] -= dp[amount][i];
+      document.getElementById("calendarDetails").textContent =
+        amount > 0
+          ? `تحويش يوم ${selectedCalendarDay}: ${money(amount)} جنيه 💰`
+          : `مفيش تحويش مسجل في يوم ${selectedCalendarDay}`;
+    });
   });
-
-  data.transactions.unshift({
-    id: Date.now() + Math.random(),
-    type: "out",
-    amount,
-    reason,
-    date: new Date().toISOString(),
-    day: todayKey()
-  });
-
-  document.getElementById("withdrawAmount").value = "";
-  document.getElementById("withdrawReason").value = "";
-  saveData();
-  renderAll();
-  toast("تم تسجيل السحب بنجاح");
 }
 
-function renderHistory() {
-  const list = document.getElementById("historyList");
-  document.getElementById("historyCount").textContent =
-    data.transactions.length + " عملية";
+// الإنجازات والتحديات
+function renderAchievements() {
+  const depositDays = new Set(
+    data.transactions
+      .filter(t => t.type === "deposit")
+      .map(t => dateKey(t.date))
+  );
 
-  const today = todayKey();
-  const todayTransactions = data.transactions.filter(t => t.day === today);
-  const todayIn = todayTransactions.filter(t => t.type === "in").reduce((s,t) => s+t.amount,0);
-  const todayOut = todayTransactions.filter(t => t.type === "out").reduce((s,t) => s+t.amount,0);
+  const dayCount = depositDays.size;
+  const balance = totalBalance();
 
-  document.getElementById("dailySummary").innerHTML = `
-    <strong>ملخص النهارده (${dateLabel(today)}):</strong><br>
-    إيداعات: ${formatMoney(todayIn)} جنيه — سحوبات: ${formatMoney(todayOut)} جنيه — الصافي: ${formatMoney(todayIn-todayOut)} جنيه
-  `;
+  const challenge = Math.min(30, dayCount);
 
-  if (!data.transactions.length) {
-    list.innerHTML = '<div class="empty">لسه مفيش عمليات مسجلة</div>';
-    return;
-  }
+  document.getElementById("challengeBar").style.width =
+    `${challenge / 30 * 100}%`;
 
-  list.innerHTML = data.transactions.map(t => `
-    <div class="transaction">
-      <div>
-        <strong>${t.type === "in" ? "إيداع" : "سحب"}</strong>
-        <small>${escapeHTML(t.reason || "")} • ${dateLabel(t.day)}</small>
-      </div>
-      <div class="${t.type === "in" ? "amount-in" : "amount-out"}">
-        ${t.type === "in" ? "+" : "−"}${formatMoney(t.amount)} ج
-      </div>
+  document.getElementById("challengeText").textContent =
+    `${challenge} من 30 يوم تحويش`;
+
+  const badges = [
+    { icon: "🌱", name: "أول تحويشة", unlocked: balance > 0 },
+    { icon: "🪙", name: "500 جنيه", unlocked: balance >= 500 },
+    { icon: "💰", name: "1000 جنيه", unlocked: balance >= 1000 },
+    { icon: "🏆", name: "5000 جنيه", unlocked: balance >= 5000 },
+    { icon: "🔥", name: "7 أيام تحويش", unlocked: dayCount >= 7 },
+    { icon: "👑", name: "30 يوم تحويش", unlocked: dayCount >= 30 }
+  ];
+
+  document.getElementById("badgesList").innerHTML = badges.map(badge => `
+    <div class="badge-card ${badge.unlocked ? "unlocked" : ""}">
+      <span class="badge-icon">${badge.icon}</span>
+      <strong>${badge.name}</strong>
+      <small>${badge.unlocked ? "تم فتح الإنجاز" : "لم يتم فتحه بعد"}</small>
     </div>
   `).join("");
 }
 
+// الإحصائيات المتقدمة
 function renderStats() {
-  const days = {};
-  data.transactions.forEach(t => {
-    if (!days[t.day]) days[t.day] = 0;
-    days[t.day] += t.type === "in" ? t.amount : -t.amount;
-  });
+  const daily = {};
 
-  const entries = Object.entries(days);
-  const positiveDays = entries.filter(([day,amount]) => amount > 0);
-  const average = positiveDays.length
-    ? positiveDays.reduce((s,[day,amount]) => s+amount,0) / positiveDays.length
+  data.transactions
+    .filter(t => t.type === "deposit")
+    .forEach(t => {
+      const key = dateKey(t.date);
+      daily[key] = (daily[key] || 0) + Number(t.amount);
+    });
+
+  const values = Object.values(daily);
+  const best = values.length ? Math.max(...values) : 0;
+  const average = values.length
+    ? values.reduce((a, b) => a + b, 0) / values.length
     : 0;
 
-  const best = entries.length
-    ? entries.reduce((a,b) => b[1] > a[1] ? b : a)
-    : null;
+  document.getElementById("bestDay").textContent = money(best);
+  document.getElementById("averageSaving").textContent = money(average);
+  document.getElementById("savingDays").textContent = values.length;
 
-  document.getElementById("dailyAverage").textContent = formatMoney(Math.round(average)) + " ج";
-  document.getElementById("bestDay").textContent =
-    best && best[1] > 0 ? dateLabel(best[0]) : "—";
-  document.getElementById("savingDays").textContent = positiveDays.length;
+  const chart = document.getElementById("weeklyChart");
+  const days = [];
 
-  const last7 = [];
-  for (let i=6; i>=0; i--) {
+  for (let i = 6; i >= 0; i--) {
     const d = new Date();
-    d.setDate(d.getDate()-i);
-    const key = d.getFullYear() + "-" +
-      String(d.getMonth()+1).padStart(2,"0") + "-" +
-      String(d.getDate()).padStart(2,"0");
-    last7.push({key, value: days[key] || 0});
+    d.setDate(d.getDate() - i);
+
+    const key = dateKey(d);
+    const amount = daily[key] || 0;
+
+    days.push({
+      name: d.toLocaleDateString("ar-EG", { weekday: "short" }),
+      amount
+    });
   }
 
-  const max = Math.max(1, ...last7.map(x => Math.max(0,x.value)));
-  document.getElementById("weeklyChart").innerHTML = last7.map(item => {
-    const height = Math.max(3, Math.max(0,item.value) / max * 125);
-    const weekday = new Date(item.key + "T12:00:00")
-      .toLocaleDateString("ar-EG",{weekday:"short"});
-    return `
-      <div class="bar-item" title="${formatMoney(item.value)} جنيه">
-        <strong style="font-size:10px">${formatMoney(item.value)}</strong>
-        <div class="bar" style="height:${height}px"></div>
-        <small>${weekday}</small>
-      </div>
-    `;
-  }).join("");
+  const max = Math.max(1, ...days.map(d => d.amount));
+
+  chart.innerHTML = days.map(day => `
+    <div class="chart-column">
+      <span>${money(day.amount)}</span>
+      <div class="chart-bar" style="height:${Math.max(3, day.amount / max * 115)}px"></div>
+      <small>${day.name}</small>
+    </div>
+  `).join("");
 }
 
-function escapeHTML(value) {
-  return String(value).replace(/[&<>"']/g, ch => ({
-    "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"
-  })[ch]);
+// الوضع الليلي
+function applyTheme() {
+  document.body.classList.toggle("light-mode", !data.darkMode);
+  document.getElementById("darkModeToggle").checked = data.darkMode;
 }
 
-function renderAll() {
-  renderMoney();
-  renderHome();
-}
+document.getElementById("darkModeToggle").addEventListener("change", event => {
+  data.darkMode = event.target.checked;
+  saveData();
+  applyTheme();
+});
 
-function downloadFile(filename, content, type) {
-  const blob = new Blob([content], {type});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+// إعداد الصوت
+document.getElementById("soundToggle").checked = data.sound;
 
-function exportJSON() {
-  downloadFile(
-    "hassalaty-backup.json",
-    JSON.stringify(data,null,2),
-    "application/json;charset=utf-8"
-  );
-  toast("جهزنا نسخة احتياطية");
-}
+document.getElementById("soundToggle").addEventListener("change", event => {
+  data.sound = event.target.checked;
+  saveData();
+  showToast(data.sound ? "تم تشغيل الصوت 🔊" : "تم كتم الصوت");
+});
 
-function exportCSV() {
-  const rows = [["النوع","المبلغ","السبب","التاريخ"]];
-  data.transactions.forEach(t => {
-    rows.push([
-      t.type === "in" ? "إيداع" : "سحب",
-      t.amount,
-      t.reason || "",
-      t.date || ""
-    ]);
+document.getElementById("testSoundBtn").addEventListener("click", () => {
+  const wasEnabled = data.sound;
+  data.sound = true;
+  playCoinSound();
+  data.sound = wasEnabled;
+});
+
+// النسخ الاحتياطي
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const backup = {
+    app: "Hasalty",
+    version: 2,
+    exportDate: new Date().toISOString(),
+    data
+  };
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {
+    type: "application/json"
   });
 
-  const csv = "\uFEFF" + rows.map(row =>
-    row.map(value => '"' + String(value).replace(/"/g,'""') + '"').join(",")
-  ).join("\n");
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
 
-  downloadFile("hassalaty-history.csv",csv,"text/csv;charset=utf-8");
-  toast("جهزنا ملف السجل");
-}
+  link.href = url;
+  link.download = `Hasalty-Backup-${todayKey()}.json`;
+  link.click();
 
-function importJSON(event) {
+  URL.revokeObjectURL(url);
+  showToast("تم تجهيز النسخة الاحتياطية 💾");
+});
+
+document.getElementById("importBtn").addEventListener("click", () => {
+  document.getElementById("importFile").click();
+});
+
+document.getElementById("importFile").addEventListener("change", async event => {
   const file = event.target.files[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const imported = JSON.parse(reader.result);
-      if (
-        !imported ||
-        !imported.counts ||
-        !Array.isArray(imported.goals) ||
-        !Array.isArray(imported.transactions)
-      ) throw new Error("invalid");
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    const restored = backup.data || backup;
 
-      const counts = {};
-      denominations.forEach(d => {
-        const n = Number(imported.counts[d] || 0);
-        if (!Number.isInteger(n) || n < 0) throw new Error("invalid counts");
-        counts[d] = n;
-      });
-
-      data = {
-        counts,
-        goals: imported.goals,
-        transactions: imported.transactions,
-        sound: imported.sound !== false
-      };
-
-      saveData();
-      renderAll();
-      toast("تم استرجاع النسخة الاحتياطية");
-    } catch(e) {
-      toast("الملف مش نسخة احتياطية صحيحة");
+    if (!Array.isArray(restored.transactions) || !Array.isArray(restored.goals)) {
+      throw new Error("Invalid backup");
     }
+
+    if (!confirm("استعادة النسخة هتستبدل البيانات الحالية. متأكد؟")) return;
+
+    data = {
+      ...defaultData,
+      ...restored
+    };
+
+    saveData();
+    renderAll();
+    applyTheme();
+    showToast("تم استعادة بياناتك بنجاح 💚");
+  } catch {
+    showToast("ملف النسخة الاحتياطية غير صالح");
+  } finally {
     event.target.value = "";
-  };
-  reader.readAsText(file);
+  }
+});
+
+// تصفير الحصالة
+document.getElementById("resetBtn").addEventListener("click", () => {
+  const first = confirm("⚠️ هل أنت متأكد؟ سيتم مسح الرصيد والأهداف وسجل العمليات.");
+  if (!first) return;
+
+  const second = confirm("تأكيد أخير: هل تريد تصفير حصّالتك بالكامل؟");
+  if (!second) return;
+
+  data.transactions = [];
+  data.goals = [];
+
+  saveData();
+  renderAll();
+
+  showToast("بدأنا من جديد يا Michael 🐷");
+});
+
+// حاسبة التحويش
+document.getElementById("calculateBtn").addEventListener("click", () => {
+  const daily = Number(document.getElementById("dailySaving").value);
+  const target = Number(document.getElementById("calculatorTarget").value);
+
+  if (daily <= 0 || target <= 0 || !Number.isFinite(daily) || !Number.isFinite(target)) {
+    showToast("اكتب أرقام صحيحة");
+    return;
+  }
+
+  const remaining = Math.max(0, target - totalBalance());
+  const days = Math.ceil(remaining / daily);
+
+  document.getElementById("calculatorResult").textContent =
+    remaining === 0
+      ? "مبروك! أنت وصلت لهدفك بالفعل 🎉"
+      : `هتوصل لهدفك في حوالي ${days} يوم لو حوّشت ${money(daily)} جنيه يوميًا 💰`;
+});
+
+// التذكير
+document.getElementById("reminderToggle").checked = data.reminder;
+document.getElementById("reminderTime").value = data.reminderTime;
+
+document.getElementById("saveReminderBtn").addEventListener("click", async () => {
+  data.reminderTime = document.getElementById("reminderTime").value;
+  data.reminder = document.getElementById("reminderToggle").checked;
+
+  if (data.reminder && "Notification" in window) {
+    if (Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+  }
+
+  saveData();
+  showToast(data.reminder
+    ? "تم حفظ التذكير. لازم الموقع يفضل مفتوح علشان يشتغل 🔔"
+    : "تم إيقاف التذكير");
+});
+
+function checkReminder() {
+  if (!data.reminder || !data.reminderTime) return;
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+  const now = new Date();
+  const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const today = todayKey();
+
+  if (currentTime === data.reminderTime && lastReminderDate !== today) {
+    lastReminderDate = today;
+
+    new Notification("حصّالتي 🐷", {
+      body: "متنساش تحويشتك النهارده يا Michael 💰"
+    });
+  }
 }
 
-loadData();
-renderAll();
-updateSoundButton();
+setInterval(checkReminder, 30000);
 
+// تحديث الموقع
+function renderAll() {
+  renderHome();
+  renderTransactions();
+  renderGoals();
+  renderCalendar();
+  renderAchievements();
+  renderStats();
+}
+
+applyTheme();
+renderAll();
+
+console.log("Hasalty is ready!");
