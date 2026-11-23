@@ -1,653 +1,475 @@
 
-const STORAGE_KEY = "hassalaty_complete_v3";
+const STORAGE_KEY = "hassalaty_bright_v1";
 
 const denominations = [5, 10, 20, 50, 100, 200];
 
 let data = {
-  transactions: [],
-  goals: [],
-  darkMode: false,
-  sound: true,
-  reminder: false,
-  reminderTime: "20:00"
+  transactions: []
 };
 
-let withdrawalCounts = {};
-let calendarDate = new Date();
+// تحميل البيانات المحفوظة
+function loadData() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
 
-const $ = id => document.getElementById(id);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+
+      if (Array.isArray(parsed.transactions)) {
+        data.transactions = parsed.transactions;
+      }
+
+      return;
+    }
+
+    // محاولة استرجاع سجل قديم لو موجود
+    const oldKeys = [
+      "hassalaty_complete_v3",
+      "hassalaty_complete_v2",
+      "hassalaty_data_v1",
+      "hassalaty_data"
+    ];
+
+    for (const key of oldKeys) {
+      const old = localStorage.getItem(key);
+      if (!old) continue;
+
+      const parsed = JSON.parse(old);
+      const oldTransactions = parsed.transactions || parsed.history;
+
+      if (Array.isArray(oldTransactions)) {
+        data.transactions = oldTransactions
+          .map(normalizeOldTransaction)
+          .filter(Boolean);
+
+        saveData();
+        return;
+      }
+
+      const oldBalance = Number(
+        parsed.balance ?? parsed.totalBalance ?? parsed.total ?? 0
+      );
+
+      if (Number.isFinite(oldBalance) && oldBalance > 0) {
+        data.transactions = [{
+          id: Date.now(),
+          type: "deposit",
+          amount: oldBalance,
+          denomination: 0,
+          date: new Date().toISOString(),
+          note: "رصيد مسترجع من نسخة سابقة"
+        }];
+
+        saveData();
+        return;
+      }
+    }
+  } catch (error) {
+    console.error("حدثت مشكلة في تحميل البيانات:", error);
+  }
+}
+
+function normalizeOldTransaction(item) {
+  if (!item || typeof item !== "object") return null;
+
+  const amount = Number(item.amount ?? item.value);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+
+  const rawType = String(item.type || item.action || "").toLowerCase();
+
+  const isWithdrawal =
+    rawType.includes("withdraw") ||
+    rawType.includes("minus") ||
+    rawType.includes("سحب") ||
+    rawType.includes("خصم");
+
+  return {
+    id: item.id || Date.now() + Math.random(),
+    type: isWithdrawal ? "withdraw" : "deposit",
+    amount,
+    denomination: Number(item.denomination || item.valueOfNote || 0),
+    date: item.date || item.createdAt || new Date().toISOString(),
+    note: item.note || ""
+  };
+}
 
 function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-function loadData() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) data = { ...data, ...JSON.parse(saved) };
-  } catch (error) {
-    console.error("تعذر تحميل البيانات", error);
-  }
-
-  data.transactions ||= [];
-  data.goals ||= [];
-
-  $("soundToggle").checked = data.sound;
-  $("reminderToggle").checked = data.reminder;
-  $("reminderTime").value = data.reminderTime || "20:00";
-
-  document.body.classList.toggle("dark", data.darkMode);
-  $("themeBtn").textContent = data.darkMode ? "☀️" : "🌙";
+// حساب الرصيد
+function getBalance() {
+  return data.transactions.reduce((total, transaction) => {
+    return total + (
+      transaction.type === "deposit"
+        ? Number(transaction.amount)
+        : -Number(transaction.amount)
+    );
+  }, 0);
 }
 
-// الصوت المميز
-function playSound() {
-  if (!data.sound) return;
+// إجمالي الإيداعات
+function getDeposits() {
+  return data.transactions
+    .filter(t => t.type === "deposit")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+}
+
+// إجمالي الخصومات
+function getWithdrawals() {
+  return data.transactions
+    .filter(t => t.type === "withdraw")
+    .reduce((sum, t) => sum + Number(t.amount), 0);
+}
+
+// عدد الأوراق المتبقية من كل فئة
+function getNoteCount(value) {
+  return data.transactions.reduce((count, transaction) => {
+    if (Number(transaction.denomination) !== value) return count;
+
+    return count + (
+      transaction.type === "deposit" ? 1 : -1
+    );
+  }, 0);
+}
+
+// صوت الإضافة والخصم
+function playSound(type = "add") {
+  const soundToggle = document.getElementById("soundToggle");
+
+  if (soundToggle && !soundToggle.checked) return;
 
   try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    const context = new AudioContextClass();
+    const AudioContextClass =
+      window.AudioContext || window.webkitAudioContext;
 
-    [880, 1174, 1568].forEach((frequency, index) => {
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
+    if (!AudioContextClass) return;
 
-      oscillator.type = "sine";
-      oscillator.frequency.value = frequency;
+    const audio = new AudioContextClass();
+    const oscillator = audio.createOscillator();
+    const gain = audio.createGain();
 
-      gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(
-        0.16,
-        context.currentTime + 0.02 + index * 0.05
-      );
-      gain.gain.exponentialRampToValueAtTime(
-        0.0001,
-        context.currentTime + 0.28 + index * 0.05
-      );
+    oscillator.connect(gain);
+    gain.connect(audio.destination);
 
-      oscillator.connect(gain);
-      gain.connect(context.destination);
+    oscillator.type = "sine";
 
-      oscillator.start(context.currentTime + index * 0.05);
-      oscillator.stop(context.currentTime + 0.35 + index * 0.05);
-    });
+    oscillator.frequency.value =
+      type === "add" ? 750 : 350;
+
+    gain.gain.setValueAtTime(0.12, audio.currentTime);
+    gain.gain.exponentialRampToValueAtTime(
+      0.001,
+      audio.currentTime + 0.18
+    );
+
+    oscillator.start();
+    oscillator.stop(audio.currentTime + 0.18);
+
+    oscillator.onended = () => audio.close();
   } catch (error) {
     console.log("الصوت غير متاح");
   }
 }
 
-function getBalance() {
-  return data.transactions.reduce((total, transaction) => {
-    return total + (transaction.type === "deposit"
-      ? transaction.amount
-      : -transaction.amount);
-  }, 0);
-}
-
-function addTransaction(type, amount, description) {
-  if (!Number.isFinite(amount) || amount <= 0) return;
-
-  if (type === "withdraw" && amount > getBalance()) {
-    alert("رصيد الحصّالة مش كافي للسحب!");
-    return false;
-  }
-
+// إضافة ورقة نقدية
+function addMoney(value) {
   data.transactions.push({
     id: Date.now() + Math.random(),
-    type,
-    amount,
-    description,
+    type: "deposit",
+    amount: value,
+    denomination: value,
     date: new Date().toISOString()
   });
 
   saveData();
-  playSound();
   renderAll();
-
-  return true;
+  playSound("add");
 }
 
-// إنشاء أزرار السحب
-function setupWithdrawButtons() {
-  const container = $("withdrawRows");
+// خصم ورقة نقدية
+function removeMoney(value) {
+  const count = getNoteCount(value);
 
-  container.innerHTML = denominations.map(value => `
-    <div class="withdraw-row">
-      <strong>${value} جنيه</strong>
-      <div class="counter">
-        <button type="button" data-action="minus" data-value="${value}">−</button>
-        <span id="count-${value}">0</span>
-        <button type="button" class="plus" data-action="plus" data-value="${value}">+</button>
-      </div>
-    </div>
-  `).join("");
+  if (count <= 0 || getBalance() < value) {
+    alert("مش عندك ورقة من الفئة دي تخصمها ❤️");
+    return;
+  }
 
-  container.addEventListener("click", event => {
+  data.transactions.push({
+    id: Date.now() + Math.random(),
+    type: "withdraw",
+    amount: value,
+    denomination: value,
+    date: new Date().toISOString()
+  });
+
+  saveData();
+  renderAll();
+  playSound("remove");
+}
+
+// التعامل مع أزرار الفئات
+const moneyGrid = document.getElementById("moneyGrid");
+
+if (moneyGrid) {
+  moneyGrid.addEventListener("click", function(event) {
     const button = event.target.closest("button[data-action]");
+
     if (!button) return;
 
     const value = Number(button.dataset.value);
     const action = button.dataset.action;
 
-    if (action === "plus") {
-      withdrawalCounts[value]++;
-    } else if (action === "minus") {
-      withdrawalCounts[value] = Math.max(0, withdrawalCounts[value] - 1);
-    }
+    if (!denominations.includes(value)) return;
 
-    updateWithdrawalTotal();
-  });
-
-  updateWithdrawalTotal();
-}
-
-function updateWithdrawalTotal() {
-  let total = 0;
-
-  denominations.forEach(value => {
-    const count = withdrawalCounts[value] || 0;
-    total += value * count;
-
-    $(`count-${value}`).textContent = count;
-  });
-
-  $("withdrawTotal").textContent = `${total} جنيه`;
-}
-
-function confirmWithdrawal() {
-  let total = 0;
-  const details = [];
-
-  denominations.forEach(value => {
-    const count = withdrawalCounts[value] || 0;
-
-    if (count > 0) {
-      total += value * count;
-      details.push(`${count} × ${value}`);
+    if (["add", "plus", "deposit"].includes(action)) {
+      addMoney(value);
+    } else if (["minus", "remove", "withdraw"].includes(action)) {
+      removeMoney(value);
     }
   });
-
-  if (total === 0) {
-    alert("اختار عدد الورق الأول");
-    return;
-  }
-
-  if (total > getBalance()) {
-    alert("المبلغ أكبر من رصيد الحصّالة!");
-    return;
-  }
-
-  const confirmed = confirm(
-    `هتسحب ${total} جنيه\n${details.join(" + ")}\nمتأكد؟`
-  );
-
-  if (!confirmed) return;
-
-  if (addTransaction("withdraw", total, details.join(" + "))) {
-    denominations.forEach(value => withdrawalCounts[value] = 0);
-    updateWithdrawalTotal();
-  }
 }
 
-// الإيداع بالضغط على الفئة
-function setupDepositButtons() {
-  $("depositButtons").addEventListener("click", event => {
-    const button = event.target.closest("[data-value]");
-    if (!button) return;
-
-    const value = Number(button.dataset.value);
-
-    addTransaction("deposit", value, `إيداع فئة ${value} جنيه`);
-  });
-}
-
-// عرض الرصيد والإحصائيات
+// تحديث الرصيد والإحصائيات
 function renderBalance() {
-  const deposits = data.transactions
-    .filter(t => t.type === "deposit");
+  const balance = getBalance();
 
-  const withdrawals = data.transactions
-    .filter(t => t.type === "withdraw");
+  const balanceElement = document.getElementById("balance");
+  const depositsElement = document.getElementById("totalDeposits");
+  const withdrawalsElement = document.getElementById("statWithdrawals");
+  const statDepositsElement = document.getElementById("statDeposits");
 
-  const totalDeposits = deposits.reduce((sum, t) => sum + t.amount, 0);
-  const totalWithdrawals = withdrawals.reduce((sum, t) => sum + t.amount, 0);
+  if (balanceElement) {
+    balanceElement.textContent = balance.toLocaleString("en-US");
+  }
 
-  $("balance").innerHTML = `${getBalance().toLocaleString("en-US")} <small>جنيه</small>`;
-  $("totalDeposits").textContent = `${totalDeposits.toLocaleString("en-US")} ج`;
-  $("totalWithdrawals").textContent = `${totalWithdrawals.toLocaleString("en-US")} ج`;
-  $("transactionCount").textContent = data.transactions.length;
+  if (depositsElement) {
+    depositsElement.textContent =
+      getDeposits().toLocaleString("en-US") + " ج.م";
+  }
+
+  if (withdrawalsElement) {
+    withdrawalsElement.textContent =
+      getWithdrawals().toLocaleString("en-US") + " ج.م";
+  }
+
+  if (statDepositsElement) {
+    statDepositsElement.textContent =
+      getDeposits().toLocaleString("en-US") + " ج.م";
+  }
+
+  denominations.forEach(value => {
+    const countElement = document.getElementById("count-" + value);
+
+    if (countElement) {
+      countElement.textContent = getNoteCount(value);
+    }
+  });
 }
 
-// سجل العمليات
+// تنسيق التاريخ
+function formatDate(dateString) {
+  const date = new Date(dateString);
+
+  if (Number.isNaN(date.getTime())) return "تاريخ غير معروف";
+
+  return date.toLocaleString("ar-EG", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
+// عرض سجل العمليات
 function renderTransactions() {
-  const container = $("transactions");
+  const container = document.getElementById("transactions");
+  const countElement = document.getElementById("transactionCount");
 
-  const sorted = [...data.transactions].sort(
-    (a, b) => new Date(b.date) - new Date(a.date)
-  );
+  if (!container) return;
 
-  if (!sorted.length) {
-    container.innerHTML = '<p class="empty">لسه مفيش عمليات</p>';
+  if (countElement) {
+    countElement.textContent = data.transactions.length;
+  }
+
+  if (data.transactions.length === 0) {
+    container.innerHTML = `
+      <div class="empty">
+        <div style="font-size:35px">🐷</div>
+        لسه مفيش عمليات.. ابدأ حوّش أول فلوس!
+      </div>
+    `;
     return;
   }
 
-  container.innerHTML = sorted.map(t => {
-    const deposit = t.type === "deposit";
-    const date = new Date(t.date).toLocaleString("ar-EG");
+  const latest = [...data.transactions].reverse().slice(0, 50);
+
+  container.innerHTML = latest.map(transaction => {
+    const isDeposit = transaction.type === "deposit";
+    const sign = isDeposit ? "+" : "−";
+    const className = isDeposit ? "deposit-amount" : "withdraw-amount";
+
+    const description = transaction.denomination
+      ? `ورقة نقدية فئة ${transaction.denomination} جنيه`
+      : "رصيد مسترجع";
 
     return `
       <div class="transaction">
         <div class="transaction-info">
-          <strong>${deposit ? "🟢 إيداع" : "🔴 سحب"}</strong>
-          <small>${t.description || ""}</small>
-          <small>${date}</small>
+          <strong>${isDeposit ? "إضافة فلوس 💚" : "خصم فلوس ❤️"}</strong>
+          <small>${description}</small>
+          <small>${formatDate(transaction.date)}</small>
         </div>
-        <strong class="${deposit ? "deposit-amount" : "withdraw-amount"}">
-          ${deposit ? "+" : "-"}${t.amount} ج
-        </strong>
-        <button class="delete-btn" data-delete="${t.id}" title="حذف العملية">🗑️</button>
+        <span class="${className}">
+          ${sign}${Number(transaction.amount).toLocaleString("en-US")} ج.م
+        </span>
       </div>
     `;
   }).join("");
 }
 
-$("transactions").addEventListener("click", event => {
-  const button = event.target.closest("[data-delete]");
-  if (!button) return;
-
-  const id = Number(button.dataset.delete);
-  const transaction = data.transactions.find(t => t.id === id);
-
-  if (!transaction) return;
-
-  if (confirm("حذف العملية دي؟")) {
-    data.transactions = data.transactions.filter(t => t.id !== id);
-    saveData();
-    renderAll();
-  }
-});
-
-// الأهداف
-function addGoal() {
-  const name = $("goalName").value.trim();
-  const amount = Number($("goalAmount").value);
-
-  if (!name || !Number.isFinite(amount) || amount <= 0) {
-    alert("اكتب اسم الهدف ومبلغه بشكل صحيح");
-    return;
-  }
-
-  data.goals.push({
-    id: Date.now(),
-    name,
-    amount
-  });
-
-  $("goalName").value = "";
-  $("goalAmount").value = "";
-
-  saveData();
-  renderGoals();
-}
-
-function renderGoals() {
-  const container = $("goalsList");
-  const balance = Math.max(0, getBalance());
-
-  if (!data.goals.length) {
-    container.innerHTML = '<p class="empty">لسه مفيش أهداف.. حدد أول حلم ليك 🎯</p>';
-    return;
-  }
-
-  container.innerHTML = data.goals.map(goal => {
-    const percent = Math.min(100, balance / goal.amount * 100);
-
-    return `
-      <div class="goal-card">
-        <div class="goal-top">
-          <strong>${escapeHTML(goal.name)}</strong>
-          <button class="delete-btn" data-goal-delete="${goal.id}">🗑️</button>
-        </div>
-        <div class="progress-track">
-          <div class="progress-fill" style="width:${percent}%"></div>
-        </div>
-        <small>${balance.toLocaleString("en-US")} من ${goal.amount.toLocaleString("en-US")} جنيه - ${Math.floor(percent)}%</small>
-      </div>
-    `;
-  }).join("");
-}
-
-$("goalsList").addEventListener("click", event => {
-  const button = event.target.closest("[data-goal-delete]");
-  if (!button) return;
-
-  const id = Number(button.dataset.goalDelete);
-
-  if (confirm("تحذف الهدف ده؟")) {
-    data.goals = data.goals.filter(goal => goal.id !== id);
-    saveData();
-    renderGoals();
-  }
-});
-
-function escapeHTML(value) {
-  return String(value).replace(/[&<>"']/g, char => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#039;"
-  })[char]);
-}
-
-// التقويم
-function renderCalendar() {
-  const year = calendarDate.getFullYear();
-  const month = calendarDate.getMonth();
-
-  const monthNames = [
-    "يناير", "فبراير", "مارس", "أبريل",
-    "مايو", "يونيو", "يوليو", "أغسطس",
-    "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"
-  ];
-
-  $("calendarTitle").textContent = `${monthNames[month]} ${year}`;
-
-  const firstDay = new Date(year, month, 1).getDay();
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  const savingDates = new Set(
-    data.transactions
-      .filter(t => t.type === "deposit")
-      .map(t => new Date(t.date).toDateString())
-  );
-
-  const today = new Date().toDateString();
-
-  let html = ["أحد", "إثن", "ثلا", "أرب", "خمي", "جمع", "سبت"]
-    .map(day => `<div class="day-name">${day}</div>`).join("");
-
-  for (let i = 0; i < firstDay; i++) {
-    html += "<div></div>";
-  }
-
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month, day);
-    const saved = savingDates.has(date.toDateString());
-    const isToday = date.toDateString() === today;
-
-    html += `
-      <div class="${saved ? "saved-day" : ""} ${isToday ? "today" : ""}">
-        ${day}${saved ? " 💰" : ""}
-      </div>
-    `;
-  }
-
-  $("calendar").innerHTML = html;
-}
-
-$("prevMonth").addEventListener("click", () => {
-  calendarDate.setMonth(calendarDate.getMonth() - 1);
-  renderCalendar();
-});
-
-$("nextMonth").addEventListener("click", () => {
-  calendarDate.setMonth(calendarDate.getMonth() + 1);
-  renderCalendar();
-});
-
-// الإنجازات
-function renderAchievements() {
-  const balance = getBalance();
-
-  const achievements = [
-    { icon: "🌱", name: "أول خطوة", condition: balance >= 5 },
-    { icon: "🥉", name: "50 جنيه", condition: balance >= 50 },
-    { icon: "🥈", name: "100 جنيه", condition: balance >= 100 },
-    { icon: "🥇", name: "500 جنيه", condition: balance >= 500 },
-    { icon: "💎", name: "1000 جنيه", condition: balance >= 1000 },
-    { icon: "👑", name: "5000 جنيه", condition: balance >= 5000 }
-  ];
-
-  $("achievements").innerHTML = achievements.map(item => `
-    <div class="achievement ${item.condition ? "unlocked" : ""}">
-      <span>${item.icon}</span>
-      <strong>${item.name}</strong>
-      <small>${item.condition ? "تم الإنجاز ✓" : "لسه مقفولة"}</small>
-    </div>
-  `).join("");
-}
-
-// الإحصائيات
-function renderStats() {
-  const deposits = data.transactions.filter(t => t.type === "deposit");
-
-  const largest = deposits.length
-    ? Math.max(...deposits.map(t => t.amount))
-    : 0;
-
-  const average = deposits.length
-    ? deposits.reduce((sum, t) => sum + t.amount, 0) / deposits.length
-    : 0;
-
-  const days = new Set(
-    deposits.map(t => new Date(t.date).toDateString())
-  );
-
-  $("largestDeposit").textContent = `${largest} ج`;
-  $("savingDays").textContent = days.size;
-  $("averageDeposit").textContent = `${Math.round(average)} ج`;
-
-  const labels = ["أحد", "إثن", "ثلا", "أرب", "خمي", "جمع", "سبت"];
-  const now = new Date();
-  const amounts = [];
-
-  for (let i = 6; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(now.getDate() - i);
-
-    const amount = deposits
-      .filter(t => new Date(t.date).toDateString() === date.toDateString())
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    amounts.push({
-      amount,
-      label: labels[date.getDay()]
-    });
-  }
-
-  const max = Math.max(...amounts.map(x => x.amount), 1);
-
-  $("weeklyChart").innerHTML = amounts.map(item => `
-    <div class="chart-column">
-      <small>${item.amount || ""}</small>
-      <div class="chart-bar" style="height:${Math.max(3, item.amount / max * 100)}%"></div>
-      <small>${item.label}</small>
-    </div>
-  `).join("");
-}
-
-// الوضع الليلي
-$("themeBtn").addEventListener("click", () => {
-  data.darkMode = !data.darkMode;
-
-  document.body.classList.toggle("dark", data.darkMode);
-  $("themeBtn").textContent = data.darkMode ? "☀️" : "🌙";
-
-  saveData();
-});
-
-// إعدادات الصوت
-$("soundToggle").addEventListener("change", event => {
-  data.sound = event.target.checked;
-  saveData();
-});
-
-$("testSound").addEventListener("click", playSound);
-
-// النسخ الاحتياطي
-$("backupBtn").addEventListener("click", () => {
-  const file = new Blob(
-    [JSON.stringify(data, null, 2)],
-    { type: "application/json" }
-  );
-
-  const url = URL.createObjectURL(file);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = "Hasalty-Backup.json";
-  link.click();
-
-  URL.revokeObjectURL(url);
-});
-
-// استرجاع النسخة
-$("restoreBtn").addEventListener("click", () => {
-  $("restoreFile").click();
-});
-
-$("restoreFile").addEventListener("change", async event => {
-  const file = event.target.files[0];
-  if (!file) return;
-
-  try {
-    const imported = JSON.parse(await file.text());
-
-    if (
-      !imported ||
-      !Array.isArray(imported.transactions) ||
-      !Array.isArray(imported.goals)
-    ) {
-      throw new Error("Invalid backup");
-    }
-
-    const validTransactions = imported.transactions.every(t =>
-      ["deposit", "withdraw"].includes(t.type) &&
-      Number.isFinite(t.amount) &&
-      t.amount > 0 &&
-      !Number.isNaN(new Date(t.date).getTime())
-    );
-
-    if (!validTransactions) throw new Error("Invalid transactions");
-
-    const balance = imported.transactions.reduce((sum, t) =>
-      sum + (t.type === "deposit" ? t.amount : -t.amount), 0
-    );
-
-    if (balance < 0) throw new Error("Invalid balance");
-
-    if (confirm("استرجاع النسخة الاحتياطية؟ البيانات الحالية هتتستبدل.")) {
-      data = {
-        ...data,
-        ...imported,
-        transactions: imported.transactions,
-        goals: imported.goals
-      };
-
-      saveData();
-      loadData();
-      renderAll();
-      alert("تم استرجاع النسخة الاحتياطية");
-    }
-  } catch (error) {
-    alert("ملف النسخة الاحتياطية غير صالح");
-  }
-
-  event.target.value = "";
-});
-
-// تصفير البيانات
-$("resetBtn").addEventListener("click", () => {
-  if (!confirm("متأكد إنك عايز تصفر الحصّالة؟")) return;
-  if (!confirm("كل العمليات والأهداف هتتمسح نهائيًا. متأكد؟")) return;
-
-  data.transactions = [];
-  data.goals = [];
-
-  saveData();
-  renderAll();
-
-  alert("تم تصفير الحصّالة");
-});
-
-// حاسبة التحويش
-$("calculateBtn").addEventListener("click", () => {
-  const target = Number($("savingTarget").value);
-  const daily = Number($("dailySaving").value);
-
-  if (
-    !Number.isFinite(target) ||
-    !Number.isFinite(daily) ||
-    target <= 0 ||
-    daily <= 0
-  ) {
-    $("calculatorResult").textContent = "اكتب أرقام صحيحة";
-    return;
-  }
-
-  const remaining = Math.max(0, target - getBalance());
-  const days = Math.ceil(remaining / daily);
-
-  $("calculatorResult").textContent = remaining === 0
-    ? "مبروك! وصلت لهدفك 🎉"
-    : `هتوصل لهدفك خلال ${days} يوم تقريبًا 🎯`;
-});
-
-// التذكير اليومي أثناء فتح الموقع
-let lastReminderDate = "";
-
-$("reminderToggle").addEventListener("change", event => {
-  data.reminder = event.target.checked;
-  saveData();
-
-  if (data.reminder && "Notification" in window &&
-      Notification.permission === "default") {
-    Notification.requestPermission();
-  }
-});
-
-$("reminderTime").addEventListener("change", event => {
-  data.reminderTime = event.target.value;
-  saveData();
-});
-
-function checkReminder() {
-  if (!data.reminder) return;
-
-  const now = new Date();
-  const currentTime =
-    String(now.getHours()).padStart(2, "0") + ":" +
-    String(now.getMinutes()).padStart(2, "0");
-
-  const today = now.toDateString();
-
-  if (currentTime === data.reminderTime && lastReminderDate !== today) {
-    lastReminderDate = today;
-
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification("حصّالتي 🐷", {
-        body: "متنساش تحوش النهارده ولو مبلغ صغير ❤️"
-      });
-    } else {
-      alert("متنساش تحوش النهارده ولو مبلغ صغير ❤️");
-    }
-  }
-}
-
+// تحديث كل أجزاء الموقع
 function renderAll() {
   renderBalance();
   renderTransactions();
-  renderGoals();
-  renderCalendar();
-  renderAchievements();
-  renderStats();
+}
+
+// الوضع الليلي
+function setDarkMode(enabled) {
+  document.body.classList.toggle("dark", enabled);
+
+  const darkToggle = document.getElementById("darkToggle");
+  const themeBtn = document.getElementById("themeBtn");
+
+  if (darkToggle) darkToggle.checked = enabled;
+
+  if (themeBtn) {
+    themeBtn.textContent = enabled ? "☀️" : "🌙";
+  }
+
+  localStorage.setItem("hassalaty_dark_mode", enabled ? "1" : "0");
+}
+
+const darkToggle = document.getElementById("darkToggle");
+
+if (darkToggle) {
+  darkToggle.addEventListener("change", () => {
+    setDarkMode(darkToggle.checked);
+  });
+}
+
+const themeBtn = document.getElementById("themeBtn");
+
+if (themeBtn) {
+  themeBtn.addEventListener("click", () => {
+    setDarkMode(!document.body.classList.contains("dark"));
+  });
+}
+
+// اختبار الصوت
+const testSound = document.getElementById("testSound");
+
+if (testSound) {
+  testSound.addEventListener("click", () => {
+    playSound("add");
+  });
+}
+
+// تصدير نسخة احتياطية
+const backupBtn = document.getElementById("backupBtn");
+
+if (backupBtn) {
+  backupBtn.addEventListener("click", () => {
+    const backup = {
+      app: "Hasalty",
+      version: 1,
+      transactions: data.transactions
+    };
+
+    const file = new Blob(
+      [JSON.stringify(backup, null, 2)],
+      { type: "application/json" }
+    );
+
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = "Hasalty-Backup.json";
+    link.click();
+
+    URL.revokeObjectURL(url);
+  });
+}
+
+// استعادة نسخة احتياطية
+const restoreBtn = document.getElementById("restoreBtn");
+const restoreFile = document.getElementById("restoreFile");
+
+if (restoreBtn && restoreFile) {
+  restoreBtn.addEventListener("click", () => {
+    restoreFile.click();
+  });
+
+  restoreFile.addEventListener("change", async () => {
+    const file = restoreFile.files[0];
+
+    if (!file) return;
+
+    try {
+      const content = await file.text();
+      const backup = JSON.parse(content);
+
+      if (!Array.isArray(backup.transactions)) {
+        throw new Error("ملف النسخة الاحتياطية غير صحيح");
+      }
+
+      const validTransactions = backup.transactions.filter(t => {
+        return (
+          t &&
+          ["deposit", "withdraw"].includes(t.type) &&
+          Number.isFinite(Number(t.amount)) &&
+          Number(t.amount) > 0
+        );
+      });
+
+      const newData = { transactions: validTransactions };
+
+      const newBalance = newData.transactions.reduce((sum, t) => {
+        return sum + (
+          t.type === "deposit"
+            ? Number(t.amount)
+            : -Number(t.amount)
+        );
+      }, 0);
+
+      if (newBalance < 0) {
+        throw new Error("النسخة الاحتياطية غير صالحة");
+      }
+
+      if (!confirm("استعادة النسخة هتستبدل البيانات الحالية. متأكد؟")) {
+        restoreFile.value = "";
+        return;
+      }
+
+      data = newData;
+      saveData();
+      renderAll();
+
+      alert("تم استعادة بيانات حصّالتي بنجاح ❤️");
+    } catch (error) {
+      alert("مش قادر أقرأ الملف. اتأكد إنه نسخة احتياطية صحيحة.");
+    }
+
+    restoreFile.value = "";
+  });
 }
 
 // تشغيل الموقع
 loadData();
-setupWithdrawButtons();
-setupDepositButtons();
 renderAll();
 
-setInterval(checkReminder, 30000);
+const savedDarkMode = localStorage.getItem("hassalaty_dark_mode");
+setDarkMode(savedDarkMode === "1");
